@@ -19,8 +19,7 @@ export async function POST(request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Dynamic import to avoid issues with pdf-parse in edge runtime
-    const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
+    const pdfParse = (await import("pdf-parse")).default;
     const data = await pdfParse(buffer);
 
     return NextResponse.json({
@@ -37,9 +36,3 @@ export async function POST(request) {
     );
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
