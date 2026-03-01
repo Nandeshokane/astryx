@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { PDFParse } from "pdf-parse";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  let parser = null;
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -21,13 +23,19 @@ export async function POST(request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const pdfParse = require("pdf-parse");
-    const data = await pdfParse(buffer);
+    // pdf-parse v2 API: pass buffer as `data` option
+    parser = new PDFParse({ data: buffer });
+
+    // Get text content
+    const textResult = await parser.getText();
+
+    // Get metadata for page count
+    const infoResult = await parser.getInfo();
 
     return NextResponse.json({
-      text: data.text,
-      pageCount: data.numpages,
-      info: data.info,
+      text: textResult.text,
+      pageCount: infoResult.total || 1,
+      info: infoResult.info || {},
       fileName: file.name,
     });
   } catch (error) {
@@ -36,5 +44,10 @@ export async function POST(request) {
       { error: "Failed to extract text from PDF: " + error.message },
       { status: 500 }
     );
+  } finally {
+    // Always free memory
+    if (parser) {
+      try { await parser.destroy(); } catch { }
+    }
   }
 }
