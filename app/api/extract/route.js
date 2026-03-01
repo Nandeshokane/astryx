@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
+import { extractText, getMeta } from "unpdf";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
-  let parser = null;
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -21,21 +20,23 @@ export async function POST(request) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const buffer = new Uint8Array(bytes);
 
-    // pdf-parse v2 API: pass buffer as `data` option
-    parser = new PDFParse({ data: buffer });
+    // unpdf handles pdfjs-dist worker setup internally
+    const { text, totalPages } = await extractText(buffer, { mergePages: true });
 
-    // Get text content
-    const textResult = await parser.getText();
-
-    // Get metadata for page count
-    const infoResult = await parser.getInfo();
+    let info = {};
+    try {
+      const meta = await getMeta(buffer);
+      info = meta?.info || {};
+    } catch {
+      // metadata not available for all PDFs
+    }
 
     return NextResponse.json({
-      text: textResult.text,
-      pageCount: infoResult.total || 1,
-      info: infoResult.info || {},
+      text,
+      pageCount: totalPages,
+      info,
       fileName: file.name,
     });
   } catch (error) {
@@ -44,10 +45,5 @@ export async function POST(request) {
       { error: "Failed to extract text from PDF: " + error.message },
       { status: 500 }
     );
-  } finally {
-    // Always free memory
-    if (parser) {
-      try { await parser.destroy(); } catch { }
-    }
   }
 }
